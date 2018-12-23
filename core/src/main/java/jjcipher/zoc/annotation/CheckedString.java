@@ -7,7 +7,8 @@ import java.lang.annotation.Target;
 
 /**
  * Annotation {@code CheckedString} can be applied to the string type fields of a ZetaObj and so the
- * {@code ZetaObjContainer} can enforce checking of the fields.
+ * {@code ZetaObjContainer} can enforce checking of the fields. Note that a CheckedString field can
+ * not be null.
  *
  * @since ZOC 1.0
  */
@@ -21,7 +22,6 @@ public @interface CheckedString {
 
   /**
    * To indicate what to be checked for the target string. Possible values are:
-   * <li>CheckedString.NOT_NULL - the target string cannot be null
    * <li>CheckedString.NOT_EMPTY- the target string cannot be null nor empty.
    * <li>CheckedString.UNIQUE - the target string cannot be null not empty, and it has to be unique
    * in the ZOC.

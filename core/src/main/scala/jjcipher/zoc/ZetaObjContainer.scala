@@ -119,7 +119,6 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
   @throws[ZocException]
   private def validateCheckedStringAnnotations(id: Long, obj: T): Unit = {
     import CheckedString._
-
     for ((f, checkSettings) <- checkedStringFields) {
       f.setAccessible(true)
       val fieldName = f.getName
@@ -158,18 +157,17 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
         }
       }
 
-      if (strValue != null) {
-        // Check maxLength if strValue is not null
-        if (strValue.length > checkSettings.maxLength) {
-          throw ZocException(ERR_CHECKED_STRING_MAX_LENGTH, fieldName)
-        }
-        // Check pattern if strValue is not null
-        val regex = checkSettings.pattern
-        if (regex.length > 0 && strValue.length > 0) {
-          strValue match {
-            case regex.r(_) => // Do nothing if it matches the pattern
-            case _ => throw ZocException(ERR_CHECKED_STRING_PATTERN, fieldName)
-          }
+      // Check maxLength if strValue is not null
+      if (strValue.length > checkSettings.maxLength) {
+        throw ZocException(ERR_CHECKED_STRING_MAX_LENGTH, fieldName)
+      }
+
+      // Check pattern if strValue is not null
+      val regex = checkSettings.pattern
+      if (regex.length > 0 && strValue.length > 0) {
+        strValue match {
+          case regex.r(_) => // Do nothing if it matches the pattern
+          case _ => throw ZocException(ERR_CHECKED_STRING_PATTERN, fieldName)
         }
       }
     }

@@ -17,6 +17,7 @@ lazy val commonSettings = Seq(
   ),
   libraryDependencies ++= Seq(
     "junit" % "junit" % "4.12" % Test,
+    "com.novocode" % "junit-interface" % "0.11" % Test,
     "org.scalactic" %% "scalactic" % "3.0.5",
     "org.scalatest" %% "scalatest" % "3.0.5" % Test
   )

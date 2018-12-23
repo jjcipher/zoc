@@ -20,7 +20,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
                                                   (implicit tag: ClassTag[T])
   extends Serializable {
 
-  require(tag != ClassTag.Nothing, "Type parameter is required!")
+  require(tag != null && tag != ClassTag.Nothing, "Type parameter is required!")
   require(maxSize >= MIN_SIZE && maxSize <= MAX_SIZE, "maxSize is invalid!")
 
   val clz: Class[_] = tag.runtimeClass
@@ -144,6 +144,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
 
   @throws[ZocException]
   def add(obj: T): ZetaObjWrapper[T] = {
+    require(obj != null)
     lock.synchronized {
       val wrapper = addInternal(obj)
       _zocMTag = Utils.genMTag()

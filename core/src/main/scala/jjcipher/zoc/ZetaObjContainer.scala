@@ -117,96 +117,16 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
   }
 
   @throws[ZocException]
-  private def validateCheckedStringAnnotations(id: Long, obj: T): Unit = {
-    import CheckedString._
-    for ((f, checkSettings) <- checkedStringFields) {
-      f.setAccessible(true)
-      val fieldName = f.getName
-      val strValue = f.get(obj).asInstanceOf[String]
-
-      checkSettings.criteria match {
-        case NOT_EMPTY if strValue isEmpty =>
-          throw ZocException(ERR_CHECKED_STRING_NOT_EMPTY, fieldName)
-        case UNIQUE if strValue isEmpty =>
-          throw ZocException(ERR_CHECKED_STRING_UNIQUE, fieldName)
-        case UNIQUE =>
-          // Check if strValue is unique...
-          for (wrapper: ZetaObjWrapper[T] <- _idMap.values) {
-            val existingStrValue = {
-              try {
-                f.get(wrapper.ref).asInstanceOf[String]
-              } catch {
-                case t: Throwable =>
-                  throw new ZocException("Parsing @CheckedString field failed!", t)
-              }
-            }
-
-            // The strValue cannot be existing unless the ZetaObj has same ID (in case for update)
-            if (strValue == existingStrValue && wrapper.id != id) {
-              throw ZocException(ERR_CHECKED_STRING_UNIQUE, fieldName)
-            }
-          }
-      }
-
-      // Check minLength (strValue cannot be null or empty)
-      val minLength = checkSettings.minLength
-      if (minLength > 0) {
-        // XXX: minLength implicitly requires NOT_NULL
-        if (strValue == null || strValue.length < minLength) {
-          throw ZocException(ERR_CHECKED_STRING_MIN_LENGTH, fieldName)
-        }
-      }
-
-      // Check maxLength if strValue is not null
-      if (strValue.length > checkSettings.maxLength) {
-        throw ZocException(ERR_CHECKED_STRING_MAX_LENGTH, fieldName)
-      }
-
-      // Check pattern if strValue is not null
-      val regex = checkSettings.pattern
-      if (regex.length > 0 && strValue.length > 0) {
-        strValue match {
-          case regex.r(_) => // Do nothing if it matches the pattern
-          case _ => throw ZocException(ERR_CHECKED_STRING_PATTERN, fieldName)
-        }
-      }
-    }
-  }
-
-  @throws[ZocException]
-  private def validateIdAnnotation(obj: T): Long = idField match {
-    case None => getNextId
-    case Some(p) =>
-      val f = p._1
-      f.setAccessible(true)
-      val providedId = f.get(obj).asInstanceOf[Long]
-
-      // Use the provided ID as object ID if it is valid
-      if (providedId isAvailable) {
-        providedId
-      } else {
-        p._2.setting() match {
-          case Id.AUTO =>
-            // Generate a new ID and replace the provided ID
-            val id = getNextId
-            f.set(obj, id)
-            id
-          case _ => throw ZocException(ERR_OBJ_ID_INVALID)
-        }
-      }
-  }
-
-  @throws[ZocException]
   private[this] def addInternal(obj: T): ZetaObjWrapper[T] = {
     if (size >= maxSize) throw ZocException(ERR_EXCEED_MAX_SIZE)
 
     // Validate the @CheckedString fields
     // XXX: Simply put INVALID_ID as the newObj's ID is OK for the 'add' case.
     //      It doesn't matter if the newObj has a valid provided ID or not.
-    validateCheckedStringAnnotations(ZetaObjContainer.INVALID_ID, obj)
+    annotationValidator.validateCheckedStringFields(ZetaObjContainer.INVALID_ID, obj)
 
     // Validate the @ID field and use it as the ID of the new object
-    val id = validateIdAnnotation(obj)
+    val id = annotationValidator.validateIdField(obj)
 
     if (obj.hasUuidField) {
       val uuid = getNextUuid
@@ -285,7 +205,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
       }
 
       // Validate the @CheckedString fields
-      validateCheckedStringAnnotations(id, obj)
+      annotationValidator.validateCheckedStringFields(id, obj)
 
       // Ensure uuid is consistent if Uuid field is available
       if (obj.hasUuidField) {
@@ -447,6 +367,80 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
         this._idMap.toMap, this._uuidMap.toMap, this._priList.toList,
         this._zocMTag, this._nextId)
       zoc
+    }
+  }
+
+  private object annotationValidator {
+    @throws[ZocException]
+    def validateCheckedStringFields(id: Long, obj: T): Unit = {
+      import CheckedString._
+      for ((f, checkSettings) <- checkedStringFields) {
+        f.setAccessible(true)
+        val fieldName = f.getName
+        val strValue = f.get(obj).asInstanceOf[String]
+
+        checkSettings.criteria match {
+          case NOT_EMPTY if strValue isEmpty =>
+            throw ZocException(ERR_CHECKED_STRING_NOT_EMPTY, fieldName)
+          case UNIQUE if strValue isEmpty =>
+            throw ZocException(ERR_CHECKED_STRING_UNIQUE, fieldName)
+          case UNIQUE =>
+            // Check if strValue is unique...
+            for (wrapper: ZetaObjWrapper[T] <- _idMap.values) {
+              val existingStrValue = {
+                try {
+                  f.get(wrapper.ref).asInstanceOf[String]
+                } catch {
+                  case t: Throwable =>
+                    throw new ZocException("Parsing @CheckedString field failed!", t)
+                }
+              }
+              // The strValue cannot be existing unless the ZetaObj has same ID (in case for update)
+              if (strValue == existingStrValue && wrapper.id != id) {
+                throw ZocException(ERR_CHECKED_STRING_UNIQUE, fieldName)
+              }
+            }
+        }
+
+        if (strValue.length < checkSettings.minLength) {
+          throw ZocException(ERR_CHECKED_STRING_MIN_LENGTH, fieldName)
+        }
+
+        if (strValue.length > checkSettings.maxLength) {
+          throw ZocException(ERR_CHECKED_STRING_MAX_LENGTH, fieldName)
+        }
+
+        val regex = checkSettings.pattern
+        if (regex.length > 0 && strValue.length > 0) {
+          strValue match {
+            case regex.r(_) => // Do nothing if it matches the pattern
+            case _ => throw ZocException(ERR_CHECKED_STRING_PATTERN, fieldName)
+          }
+        }
+      }
+    }
+
+    @throws[ZocException]
+    def validateIdField(obj: T): Long = idField match {
+      case None => getNextId
+      case Some(p) =>
+        val f = p._1
+        f.setAccessible(true)
+        val providedId = f.get(obj).asInstanceOf[Long]
+
+        // Use the provided ID as object ID if it is valid
+        if (providedId isAvailable) {
+          providedId
+        } else {
+          p._2.setting() match {
+            case Id.AUTO =>
+              // Generate a new ID and replace the provided ID
+              val id = getNextId
+              f.set(obj, id)
+              id
+            case _ => throw ZocException(ERR_OBJ_ID_INVALID)
+          }
+        }
     }
   }
 

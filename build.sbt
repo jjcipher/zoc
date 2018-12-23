@@ -56,3 +56,11 @@ lazy val examples = (project in file("examples"))
     name := "zoc-examples",
     commonSettings
   ).dependsOn(core)
+
+lazy val root = (project in file("."))
+  .settings(
+    name := "zoc-root",
+  ).aggregate(
+    core,
+    examples
+  )

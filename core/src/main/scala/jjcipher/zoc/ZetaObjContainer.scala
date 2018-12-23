@@ -10,7 +10,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.language.postfixOps
 import scala.reflect.ClassTag
 
-@SerialVersionUID(100L)
+@SerialVersionUID(1L)
 final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
                                                    idMap: Map[Long, ZetaObjWrapper[T]],
                                                    uuidMap: Map[String, Long],
@@ -41,7 +41,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
 
   /** A flag indicating whether the ZetaObj implements WithPriority. */
   @transient
-  lazy val isWithPriority = classOf[WithPriority].isAssignableFrom(clz)
+  lazy val isWithPriority: Boolean = classOf[WithPriority].isAssignableFrom(clz)
 
   @transient
   private[zoc] lazy val checkedStringFields: Array[(Field, CheckedString)] =
@@ -95,17 +95,20 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
    * XXX: An assumption here is that the maxSize is smaller than the ID range. It might fall into a
    * infinite loop if that is not the case.
    */
-  private def getNextId(): Long = {
+  private def getNextId: Long = {
     var candidate = 0L
     do {
       candidate = _nextId
-      if (_nextId >= MAX_ID) _nextId = MIN_ID
-      else _nextId += 1
+      if (_nextId >= MAX_ID) {
+        _nextId = MIN_ID
+      } else {
+        _nextId += 1
+      }
     } while (_idMap.contains(candidate))
     candidate
   }
 
-  private def getNextUuid(): String = {
+  private def getNextUuid: String = {
     var candidate: String = Utils.genUUID()
     while (_uuidMap.contains(candidate)) {
       candidate = Utils.genUUID()
@@ -119,31 +122,30 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
 
     for ((f, checkSettings) <- checkedStringFields) {
       f.setAccessible(true)
+      val fieldName = f.getName
       val strValue = f.get(obj).asInstanceOf[String]
 
-      val criteria = checkSettings.criteria
-      criteria match {
-        case NOT_NULL if strValue == null =>
-          throw ZocException(ERR_CHECKED_STRING_NOT_NULL, f.getName)
-        case NOT_EMPTY if strValue == null || strValue.length == 0 =>
-          throw ZocException(ERR_CHECKED_STRING_NOT_EMPTY, f.getName)
-        case UNIQUE if strValue == null || strValue.length == 0 =>
-          throw ZocException(ERR_CHECKED_STRING_UNIQUE, f.getName)
+      checkSettings.criteria match {
+        case NOT_EMPTY if strValue isEmpty =>
+          throw ZocException(ERR_CHECKED_STRING_NOT_EMPTY, fieldName)
+        case UNIQUE if strValue isEmpty =>
+          throw ZocException(ERR_CHECKED_STRING_UNIQUE, fieldName)
         case UNIQUE =>
           // Check if strValue is unique...
           for (wrapper: ZetaObjWrapper[T] <- _idMap.values) {
             val existingStrValue = {
               try {
-                f.get(obj).asInstanceOf[String]
+                f.get(wrapper.ref).asInstanceOf[String]
               } catch {
-                case t: Throwable => throw new ZocException("Parsing @CheckedString field " +
-                  "failed!", t)
+                case t: Throwable =>
+                  throw new ZocException("Parsing @CheckedString field failed!", t)
               }
             }
 
             // The strValue cannot be existing unless the ZetaObj has same ID (in case for update)
-            if (strValue == existingStrValue && wrapper.id != id)
-              throw ZocException(ERR_CHECKED_STRING_UNIQUE, f.getName)
+            if (strValue == existingStrValue && wrapper.id != id) {
+              throw ZocException(ERR_CHECKED_STRING_UNIQUE, fieldName)
+            }
           }
       }
 
@@ -151,21 +153,22 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
       val minLength = checkSettings.minLength
       if (minLength > 0) {
         // XXX: minLength implicitly requires NOT_NULL
-        if (strValue == null || strValue.length < minLength)
-          throw ZocException(ERR_CHECKED_STRING_MIN_LENGTH, f.getName)
+        if (strValue == null || strValue.length < minLength) {
+          throw ZocException(ERR_CHECKED_STRING_MIN_LENGTH, fieldName)
+        }
       }
 
       if (strValue != null) {
         // Check maxLength if strValue is not null
-        if (strValue.length > checkSettings.maxLength)
-          throw ZocException(ERR_CHECKED_STRING_MAX_LENGTH, f.getName)
-
+        if (strValue.length > checkSettings.maxLength) {
+          throw ZocException(ERR_CHECKED_STRING_MAX_LENGTH, fieldName)
+        }
         // Check pattern if strValue is not null
         val regex = checkSettings.pattern
         if (regex.length > 0 && strValue.length > 0) {
           strValue match {
             case regex.r(_) => // Do nothing if it matches the pattern
-            case _ => throw ZocException(ERR_CHECKED_STRING_PATTERN, f.getName)
+            case _ => throw ZocException(ERR_CHECKED_STRING_PATTERN, fieldName)
           }
         }
       }
@@ -174,19 +177,20 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
 
   @throws[ZocException]
   private def validateIdAnnotation(obj: T): Long = idField match {
-    case None => getNextId()
+    case None => getNextId
     case Some(p) =>
       val f = p._1
       f.setAccessible(true)
       val providedId = f.get(obj).asInstanceOf[Long]
 
       // Use the provided ID as object ID if it is valid
-      if (providedId isAvailable) providedId
-      else {
+      if (providedId isAvailable) {
+        providedId
+      } else {
         p._2.setting() match {
           case Id.AUTO =>
             // Generate a new ID and replace the provided ID
-            val id = getNextId()
+            val id = getNextId
             f.set(obj, id)
             id
           case _ => throw ZocException(ERR_OBJ_ID_INVALID)
@@ -195,7 +199,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
   }
 
   @throws[ZocException]
-  private[this] def _add(obj: T): ZetaObjWrapper[T] = {
+  private[this] def addInternal(obj: T): ZetaObjWrapper[T] = {
     if (size >= maxSize) throw ZocException(ERR_EXCEED_MAX_SIZE)
 
     // Validate the @CheckedString fields
@@ -207,7 +211,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
     val id = validateIdAnnotation(obj)
 
     if (obj.hasUuidField) {
-      val uuid = getNextUuid()
+      val uuid = getNextUuid
       obj.setMetaField(uuidField, uuid)
       _uuidMap.put(uuid, id)
     }
@@ -223,7 +227,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
   @throws[ZocException]
   def add(obj: T): ZetaObjWrapper[T] = {
     lock.synchronized {
-      val wrapper = _add(obj)
+      val wrapper = addInternal(obj)
       _zocMTag = Utils.genMTag()
       wrapper
     }
@@ -259,7 +263,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
     rollbackable(() => {
       val results = new ArrayBuffer[ZetaObjWrapper[T]]
       for (obj <- objList) {
-        val newWrapper = _add(obj)
+        val newWrapper = addInternal(obj)
         results.append(newWrapper)
       }
       _zocMTag = Utils.genMTag()
@@ -301,18 +305,21 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
 
   @throws[ZocException]
   private[zoc] def update(obj: T): ZetaObjWrapper[T] = {
-    if (obj.providedId isValid) update(obj.providedId, obj)
-    else if (obj.hasUuidField) {
+    if (obj.providedId isValid) {
+      update(obj.providedId, obj)
+    } else if (obj.hasUuidField) {
       val id = _uuidMap.get(obj.uuid) match {
         case Some(l) => l
         case None => throw new ZocException(ERR_OBJ_UUID_NOT_EXIST)
       }
       update(id, obj)
-    } else throw new ZocException(ERR_SHOULD_NOT_HAPPEN, s"Class $tag does not support update(T)")
+    } else {
+      throw new ZocException(ERR_SHOULD_NOT_HAPPEN, s"Class $tag does not support update(T)")
+    }
   }
 
   @throws[ZocException]
-  private[this] def _delete(id: Long): ZetaObjWrapper[T] = {
+  private[this] def deleteInternal(id: Long): ZetaObjWrapper[T] = {
     val deletedWrapper = _idMap.remove(id) match {
       case None => throw ZocException(ERR_OBJ_ID_NOT_EXIST, s"ID $id does not exist!")
       case Some(w) => w
@@ -325,7 +332,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
   @throws[ZocException]
   def delete(id: Long): ZetaObjWrapper[T] = {
     lock.synchronized {
-      val deletedWrapper = _delete(id)
+      val deletedWrapper = deleteInternal(id)
       _zocMTag = Utils.genMTag()
       deletedWrapper
     }
@@ -339,7 +346,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
         case _ => throw new ZocException(ERR_OBJ_UUID_NOT_EXIST)
       }
 
-      val deletedWrapper = _delete(id)
+      val deletedWrapper = deleteInternal(id)
       _zocMTag = Utils.genMTag()
       deletedWrapper
     }
@@ -350,7 +357,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
     rollbackable(() => {
       val results = new ArrayBuffer[ZetaObjWrapper[T]]
       for (id <- idList) {
-        val oldWrapper = _delete(id)
+        val oldWrapper = deleteInternal(id)
         results.append(oldWrapper)
       }
       _zocMTag = Utils.genMTag()
@@ -360,7 +367,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
 
   @throws[ZocException]
   def moveUp(id: Long): Unit = {
-    if (isWithPriority)
+    if (isWithPriority) {
       lock.synchronized {
         val pos = _priList.indexOf(id)
         if (pos != 0) {
@@ -369,11 +376,12 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
           _zocMTag = Utils.genMTag()
         }
       }
+    }
   }
 
   @throws[ZocException]
   def moveDown(id: Long): Unit = {
-    if (isWithPriority)
+    if (isWithPriority) {
       lock.synchronized {
         val pos = _priList.indexOf(id)
         if (pos != _priList.size - 1) {
@@ -382,14 +390,15 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
           _zocMTag = Utils.genMTag()
         }
       }
+    }
   }
 
   @throws[ZocException]
   def moveTo(id: Long, newPos: Int): Unit = {
     if (isWithPriority) {
-      if (newPos < 0 || newPos > _priList.size - 1)
+      if (newPos < 0 || newPos > _priList.size - 1) {
         throw ZocException(ERR_INPUT_PRIORITY_INVALID, "Priority (" + newPos + ") is invalid!")
-
+      }
       lock.synchronized {
         val pos = _priList.indexOf(id)
         if (pos != newPos) {
@@ -401,10 +410,10 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
     }
   }
 
-  def filter(p: (ZetaObjWrapper[T]) => Boolean): Stream[ZetaObjWrapper[T]] =
+  def filter(p: ZetaObjWrapper[T] => Boolean): Stream[ZetaObjWrapper[T]] =
     _idMap.values.toStream.filter(p)
 
-  def find(p: (ZetaObjWrapper[T]) => Boolean): Option[ZetaObjWrapper[T]] =
+  def find(p: ZetaObjWrapper[T] => Boolean): Option[ZetaObjWrapper[T]] =
     _idMap.values.toStream.find(p)
 
   def findById(id: Long): Option[ZetaObjWrapper[T]] = _idMap.get(id)

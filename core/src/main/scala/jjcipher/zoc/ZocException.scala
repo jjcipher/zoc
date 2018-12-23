@@ -1,14 +1,14 @@
 package jjcipher.zoc
 
-case class ZocException private[zoc] (val errorId: Int,
-                                      message: String = null,
-                                      throwable: Throwable = null)
+case class ZocException private[zoc] (errorId: Int,
+                                      message: String = "",
+                                      throwable: Throwable = None.orNull)
   extends Exception(message, throwable) {
 
   def this(message: String, throwable: Throwable) = this(ZocException.ERR_UNDEFINED,
     message, throwable)
 
-  def this(message: String) = this(message, null)
+  def this(message: String) = this(ZocException.ERR_UNDEFINED, message)
 }
 
 object ZocException {

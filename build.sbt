@@ -35,11 +35,21 @@ val pbdirectSettings = Seq(
   libraryDependencies += "beyondthelines" %% "pbdirect" % "0.1.0"
 )
 
+val scoverageSettings = Seq(
+  coverageEnabled := true,
+  coverageMinimum := 70,
+  coverageFailOnMinimum := false,
+  coverageHighlighting := true,
+  publishArtifact in Test := false,
+  parallelExecution in Test := false
+)
+
 lazy val core = (project in file("core"))
   .enablePlugins(BuildInfoPlugin)
   .settings(
     name := "zoc-core",
     commonSettings,
+    scoverageSettings,
     pbdirectSettings,
     buildInfoKeys := Seq[BuildInfoKey](
       name,

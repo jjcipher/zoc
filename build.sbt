@@ -51,6 +51,7 @@ lazy val core = (project in file("core"))
     name := "zoc-core",
     commonSettings,
     scoverageSettings,
+    coverageExcludedPackages := "buildInfo.*",
     pbdirectSettings,
     buildInfoKeys := Seq[BuildInfoKey](
       name,

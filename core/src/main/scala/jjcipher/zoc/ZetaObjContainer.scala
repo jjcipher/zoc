@@ -123,10 +123,10 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
     // Validate the @CheckedString fields
     // XXX: Simply put INVALID_ID as the newObj's ID is OK for the 'add' case.
     //      It doesn't matter if the newObj has a valid provided ID or not.
-    annotationValidator.validateCheckedStringFields(ZetaObjContainer.INVALID_ID, obj)
+    AnnotValidator.validateCheckedStringFields(ZetaObjContainer.INVALID_ID, obj)
 
     // Validate the @ID field and use it as the ID of the new object
-    val id = annotationValidator.validateIdField(obj)
+    val id = AnnotValidator.validateIdField(obj)
 
     if (obj.hasUuidField) {
       val uuid = getNextUuid
@@ -206,7 +206,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
       }
 
       // Validate the @CheckedString fields
-      annotationValidator.validateCheckedStringFields(id, obj)
+      AnnotValidator.validateCheckedStringFields(id, obj)
 
       // Ensure uuid is consistent if Uuid field is available
       if (obj.hasUuidField) {
@@ -371,7 +371,7 @@ final class ZetaObjContainer[T <: ZetaObj] private(val maxSize: Int,
     }
   }
 
-  private object annotationValidator {
+  private object AnnotValidator {
     @throws[ZocException]
     def validateCheckedStringFields(id: Long, obj: T): Unit = {
       import CheckedString._
